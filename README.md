@@ -39,7 +39,7 @@ The MSRV for this crate is 1.55.0.
 - no_std
     ```toml
     [dependencies]
-    caches = {version: "0.2", features: ["core"]}
+    caches = {version = "0.2", features = ["core"], default-features = false}
     ```
 
 ## Usages

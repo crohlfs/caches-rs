@@ -8,6 +8,7 @@ use crate::lfu::tinylfu::bloom::Bloom;
 use crate::lfu::tinylfu::sketch::CountMinSketch;
 use crate::lfu::{DefaultKeyHasher, KeyHasher};
 use crate::KeyRef;
+use crate::{cfg_not_std, cfg_std};
 use core::borrow::Borrow;
 use core::hash::Hash;
 use core::marker::PhantomData;
@@ -148,46 +149,95 @@ impl<K: Hash + Eq, KH: KeyHasher<K>> TinyLFU<K, KH> {
         builder.finalize()
     }
 
-    /// estimates the frequency for a key.
-    ///
-    /// # Details
-    /// Explanation from [TinyLFU: A Highly Efficient Cache Admission Policy §3.4.2]:
-    /// - When querying items, we use both the Doorkeeper and the main structures.
-    /// That is, if the item is included in the Doorkeeper,
-    /// TinyLFU estimates the frequency of this item as its estimation in the main structure plus 1.
-    /// Otherwise, TinyLFU returns just the estimation from the main structure.
-    ///
-    /// [TinyLFU: A Highly Efficient Cache Admission Policy §3.4.2]: https://arxiv.org/pdf/1512.00727.pdf
-    pub fn estimate<Q>(&self, key: &Q) -> u64
+    cfg_std!(
+        /// estimates the frequency for a key.
+        ///
+        /// # Details
+        /// Explanation from [TinyLFU: A Highly Efficient Cache Admission Policy §3.4.2]:
+        /// - When querying items, we use both the Doorkeeper and the main structures.
+        /// That is, if the item is included in the Doorkeeper,
+        /// TinyLFU estimates the frequency of this item as its estimation in the main structure plus 1.
+        /// Otherwise, TinyLFU returns just the estimation from the main structure.
+        ///
+        /// [TinyLFU: A Highly Efficient Cache Admission Policy §3.4.2]: https://arxiv.org/pdf/1512.00727.pdf
+        pub fn estimate<Q>(&self, key: &Q) -> u64
         where
             KeyRef<K>: Borrow<Q>,
             Q: Hash + Eq + ?Sized,
-    {
-        let kh = self.hash_key(key);
-        let mut hits = self.ctr.estimate(kh);
-        if self.doorkeeper.contains(kh) {
-            hits += 1;
+        {
+            let kh = self.hash_key(key);
+            let mut hits = self.ctr.estimate(kh);
+            if self.doorkeeper.contains(kh) {
+                hits += 1;
+            }
+            hits
         }
-        hits
-    }
+    );
 
-    /// estimates the frequency.of key hash
-    ///
-    /// # Details
-    /// Explanation from [TinyLFU: A Highly Efficient Cache Admission Policy §3.4.2]:
-    /// - When querying items, we use both the Doorkeeper and the main structures.
-    /// That is, if the item is included in the Doorkeeper,
-    /// TinyLFU estimates the frequency of this item as its estimation in the main structure plus 1.
-    /// Otherwise, TinyLFU returns just the estimation from the main structure.
-    ///
-    /// [TinyLFU: A Highly Efficient Cache Admission Policy §3.4.2]: https://arxiv.org/pdf/1512.00727.pdf
-    pub fn estimate_hashed_key(&self, kh: u64) -> u64 {
-        let mut hits = self.ctr.estimate(kh);
-        if self.doorkeeper.contains(kh) {
-            hits += 1;
+    cfg_not_std!(
+        /// estimates the frequency for a key.
+        ///
+        /// # Details
+        /// Explanation from [TinyLFU: A Highly Efficient Cache Admission Policy §3.4.2]:
+        /// - When querying items, we use both the Doorkeeper and the main structures.
+        /// That is, if the item is included in the Doorkeeper,
+        /// TinyLFU estimates the frequency of this item as its estimation in the main structure plus 1.
+        /// Otherwise, TinyLFU returns just the estimation from the main structure.
+        ///
+        /// [TinyLFU: A Highly Efficient Cache Admission Policy §3.4.2]: https://arxiv.org/pdf/1512.00727.pdf
+        pub fn estimate<Q>(&self, key: &Q) -> u8
+        where
+            KeyRef<K>: Borrow<Q>,
+            Q: Hash + Eq + ?Sized,
+        {
+            let kh = self.hash_key(key);
+            let mut hits = self.ctr.estimate(kh);
+            if self.doorkeeper.contains(kh) {
+                hits += 1;
+            }
+            hits
         }
-        hits
-    }
+    );
+
+    cfg_std!(
+        /// estimates the frequency.of key hash
+        ///
+        /// # Details
+        /// Explanation from [TinyLFU: A Highly Efficient Cache Admission Policy §3.4.2]:
+        /// - When querying items, we use both the Doorkeeper and the main structures.
+        /// That is, if the item is included in the Doorkeeper,
+        /// TinyLFU estimates the frequency of this item as its estimation in the main structure plus 1.
+        /// Otherwise, TinyLFU returns just the estimation from the main structure.
+        ///
+        /// [TinyLFU: A Highly Efficient Cache Admission Policy §3.4.2]: https://arxiv.org/pdf/1512.00727.pdf
+        pub fn estimate_hashed_key(&self, kh: u64) -> u64 {
+            let mut hits = self.ctr.estimate(kh);
+            if self.doorkeeper.contains(kh) {
+                hits += 1;
+            }
+            hits
+        }
+    );
+
+    cfg_not_std!(
+        /// estimates the frequency.of key hash
+        ///
+        /// # Details
+        /// Explanation from [TinyLFU: A Highly Efficient Cache Admission Policy §3.4.2]:
+        /// - When querying items, we use both the Doorkeeper and the main structures.
+        /// That is, if the item is included in the Doorkeeper,
+        /// TinyLFU estimates the frequency of this item as its estimation in the main structure plus 1.
+        /// Otherwise, TinyLFU returns just the estimation from the main structure.
+        ///
+        /// [TinyLFU: A Highly Efficient Cache Admission Policy §3.4.2]: https://arxiv.org/pdf/1512.00727.pdf
+        pub fn estimate_hashed_key(&self, kh: u64) -> u8 {
+            let mut hits = self.ctr.estimate(kh);
+            if self.doorkeeper.contains(kh) {
+                hits += 1;
+            }
+            hits
+        }
+    );
 
     /// increment multiple keys, for details, please see [`increment`].
     ///
@@ -275,9 +325,9 @@ impl<K: Hash + Eq, KH: KeyHasher<K>> TinyLFU<K, KH> {
     /// `contains` checks if bit(s) for entry is/are set,
     /// returns true if the hash was added to the TinyLFU.
     pub fn contains<Q>(&self, key: &Q) -> bool
-        where
-            KeyRef<K>: Borrow<Q>,
-            Q: Hash + Eq + ?Sized,
+    where
+        KeyRef<K>: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
     {
         let kh = self.hash_key(key);
         self.doorkeeper.contains(kh)
@@ -291,9 +341,9 @@ impl<K: Hash + Eq, KH: KeyHasher<K>> TinyLFU<K, KH> {
 
     /// `eq` compares `a` and `b`, returns if `a`'s counter is equal to `b`'s counter.
     pub fn eq<'a, 'b, Q>(&'_ self, a: &'a Q, b: &'b Q) -> bool
-        where
-            KeyRef<K>: Borrow<Q>,
-            Q: Hash + Eq + ?Sized,
+    where
+        KeyRef<K>: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
     {
         let (a_ctr, b_ctr) = self.compare_helper(a, b);
 
@@ -306,9 +356,10 @@ impl<K: Hash + Eq, KH: KeyHasher<K>> TinyLFU<K, KH> {
 
     /// `le` compares `a` and `b`, returns if `a`'s counter is less or equal to `b`'s counter.
     pub fn le<'a, 'b, Q>(&'_ self, a: &'a Q, b: &'b Q) -> bool
-        where
-            KeyRef<K>: Borrow<Q>,
-            Q: Hash + Eq + ?Sized,  {
+    where
+        KeyRef<K>: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
         let (a_ctr, b_ctr) = self.compare_helper(a, b);
 
         if a_ctr <= b_ctr {
@@ -320,9 +371,10 @@ impl<K: Hash + Eq, KH: KeyHasher<K>> TinyLFU<K, KH> {
 
     /// `lt` compares `a` and `b`, returns if `a`'s counter is less than `b`'s counter.
     pub fn lt<'a, 'b, Q>(&'_ self, a: &'a Q, b: &'b Q) -> bool
-        where
-            KeyRef<K>: Borrow<Q>,
-            Q: Hash + Eq + ?Sized,  {
+    where
+        KeyRef<K>: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
         let (a_ctr, b_ctr) = self.compare_helper(a, b);
 
         if a_ctr < b_ctr {
@@ -334,9 +386,10 @@ impl<K: Hash + Eq, KH: KeyHasher<K>> TinyLFU<K, KH> {
 
     /// `gt` compares `a` and `b`, returns if `a`'s counter is greater than `b`'s counter.
     pub fn gt<'a, 'b, Q>(&'_ self, a: &'a Q, b: &'b Q) -> bool
-        where
-            KeyRef<K>: Borrow<Q>,
-            Q: Hash + Eq + ?Sized,  {
+    where
+        KeyRef<K>: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
         let (a_ctr, b_ctr) = self.compare_helper(a, b);
 
         if a_ctr > b_ctr {
@@ -348,9 +401,10 @@ impl<K: Hash + Eq, KH: KeyHasher<K>> TinyLFU<K, KH> {
 
     /// `ge` compares `a` and `b`, returns if `a`'s counter is greater or equal to `b`'s counter.
     pub fn ge<'a, 'b, Q>(&'_ self, a: &'a Q, b: &'b Q) -> bool
-        where
-            KeyRef<K>: Borrow<Q>,
-            Q: Hash + Eq + ?Sized,  {
+    where
+        KeyRef<K>: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
         let (a_ctr, b_ctr) = self.compare_helper(a, b);
 
         if a_ctr >= b_ctr {
@@ -360,37 +414,73 @@ impl<K: Hash + Eq, KH: KeyHasher<K>> TinyLFU<K, KH> {
         }
     }
 
-    fn compare_helper<'a, 'b, Q>(&'_ self, a: &'a Q, b: &'b Q) -> (u64, u64)
+    cfg_std!(
+        fn compare_helper<'a, 'b, Q>(&'_ self, a: &'a Q, b: &'b Q) -> (u64, u64)
         where
             KeyRef<K>: Borrow<Q>,
             Q: Hash + Eq + ?Sized,
-    {
-        let akh = self.hash_key(a);
-        let mut a_ctr = 0;
-        if !self.doorkeeper.contains(akh) {
-            let bkh = self.hash_key(b);
-            return if !self.doorkeeper.contains(bkh) {
-                (0, 0)
+        {
+            let akh = self.hash_key(a);
+            let mut a_ctr = 0;
+            if !self.doorkeeper.contains(akh) {
+                let bkh = self.hash_key(b);
+                return if !self.doorkeeper.contains(bkh) {
+                    (0, 0)
+                } else {
+                    (0, 1)
+                };
             } else {
-                (0, 1)
-            };
-        } else {
-            a_ctr += 1;
+                a_ctr += 1;
+            }
+
+            let bkh = self.hash_key(b);
+            let mut b_ctr = 0;
+            if !self.doorkeeper.contains(bkh) {
+                return (1, 0);
+            } else {
+                b_ctr += 1;
+            }
+
+            a_ctr += self.ctr.estimate(akh);
+            b_ctr += self.ctr.estimate(bkh);
+
+            (a_ctr, b_ctr)
         }
+    );
 
-        let bkh = self.hash_key(b);
-        let mut b_ctr = 0;
-        if !self.doorkeeper.contains(bkh) {
-            return (1, 0);
-        } else {
-            b_ctr += 1;
+    cfg_not_std!(
+        fn compare_helper<'a, 'b, Q>(&'_ self, a: &'a Q, b: &'b Q) -> (u8, u8)
+        where
+            KeyRef<K>: Borrow<Q>,
+            Q: Hash + Eq + ?Sized,
+        {
+            let akh = self.hash_key(a);
+            let mut a_ctr = 0;
+            if !self.doorkeeper.contains(akh) {
+                let bkh = self.hash_key(b);
+                return if !self.doorkeeper.contains(bkh) {
+                    (0, 0)
+                } else {
+                    (0, 1)
+                };
+            } else {
+                a_ctr += 1;
+            }
+
+            let bkh = self.hash_key(b);
+            let mut b_ctr = 0;
+            if !self.doorkeeper.contains(bkh) {
+                return (1, 0);
+            } else {
+                b_ctr += 1;
+            }
+
+            a_ctr += self.ctr.estimate(akh);
+            b_ctr += self.ctr.estimate(bkh);
+
+            (a_ctr, b_ctr)
         }
-
-        a_ctr += self.ctr.estimate(akh);
-        b_ctr += self.ctr.estimate(bkh);
-
-        (a_ctr, b_ctr)
-    }
+    );
 
     /// Returns the hash for the key
     #[inline]
